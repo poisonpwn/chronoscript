@@ -518,7 +518,21 @@ def export_to_json(timetables: list, filtered_json: dict, n_export: int = 100) -
 
 if __name__ == "__main__":
     # need to get these as inputs
-    CDCs = [
+
+    # load the json file created
+    from InquirerPy import inquirer
+
+    tt_json = json.load(open("./files/timetable.json", "r"))
+    possible_courses = list(tt_json["courses"].keys())
+
+    CDCs = inquirer.fuzzy(
+        message="Select CDCs",
+        choices=possible_courses,
+        multiselect=True,
+        max_height="70%",
+    ).execute()
+
+    """CDCs = [
         "CS F213",
         "CS F214",
         "CS F215",
@@ -526,30 +540,48 @@ if __name__ == "__main__":
         "ECON F311",
         "ECON F312",
         "ECON F313",
-    ]
+    ]"""
+
+    for course in CDCs:
+        possible_courses.remove(course)
 
     # Order the oreference of DELs, HUELs and OPELs
-
-    DEls = []
-
+    DEls = inquirer.fuzzy(
+        message="Select DEls",
+        choices=possible_courses,
+        multiselect=True,
+        max_height="70%",
+    ).execute()
     nDels = len(DEls)
 
-    OPELs = []
-
+    OPELs = inquirer.fuzzy(
+        message="Select OPELs",
+        choices=possible_courses,
+        multiselect=True,
+        max_height="70%",
+    ).execute()
     nOpels = len(OPELs)
 
-    HUELs = []
-
+    HUELs = inquirer.fuzzy(
+        message="Select HUELs",
+        choices=possible_courses,
+        multiselect=True,
+        max_height="70%",
+    ).execute()
     nHuels = len(HUELs)
 
     pref = ["DEls", "OPELs", "HUELs"]
 
-    free_days = ["S"]
+    WEEK_DAYS = ["Su", "M", "T", "W", "Th", "F", "S"]
+    free_days = inquirer.fuzzy(
+        message="Select freedays",
+        choices=WEEK_DAYS,
+        multiselect=True,
+        max_height="70%",
+    )
 
+    # implement ranking select to a permutation of WEEK_DAYS as the lite order
     lite_order = ["S", "Su", "M", "T", "W", "Th", "F"]
-
-    # load the json file created
-    tt_json = json.load(open("./files/timetable.json", "r"))
 
     filtered_json = get_filtered_json(tt_json, CDCs, DEls, HUELs, OPELs)
 
