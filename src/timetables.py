@@ -532,16 +532,6 @@ if __name__ == "__main__":
         max_height="70%",
     ).execute()
 
-    """CDCs = [
-        "CS F213",
-        "CS F214",
-        "CS F215",
-        "CS F222",
-        "ECON F311",
-        "ECON F312",
-        "ECON F313",
-    ]"""
-
     for course in CDCs:
         possible_courses.remove(course)
 
@@ -549,26 +539,39 @@ if __name__ == "__main__":
     DEls = inquirer.fuzzy(
         message="Select DEls",
         choices=possible_courses,
+        filter=lambda result: result if result is not None else [],
+        default="NONE",
         multiselect=True,
         max_height="70%",
     ).execute()
     nDels = len(DEls)
 
+    for course in DEls:
+        possible_courses.remove(course)
+
     OPELs = inquirer.fuzzy(
         message="Select OPELs",
         choices=possible_courses,
+        default="NONE",
         multiselect=True,
         max_height="70%",
     ).execute()
     nOpels = len(OPELs)
 
+    for course in OPELs:
+        possible_courses.remove(course)
+
     HUELs = inquirer.fuzzy(
         message="Select HUELs",
         choices=possible_courses,
+        default="NONE",
         multiselect=True,
         max_height="70%",
     ).execute()
     nHuels = len(HUELs)
+
+    for course in HUELs:
+        possible_courses.remove(course)
 
     pref = ["DEls", "OPELs", "HUELs"]
 
@@ -578,10 +581,27 @@ if __name__ == "__main__":
         choices=WEEK_DAYS,
         multiselect=True,
         max_height="70%",
-    )
+    ).execute()
 
-    # implement ranking select to a permutation of WEEK_DAYS as the lite order
-    lite_order = ["S", "Su", "M", "T", "W", "Th", "F"]
+    get_items_list = lambda list_str: [day.strip() for day in list_str.split(",")]
+
+    def is_valid_permutation_str(permutation_str, orig_list):
+        permutation = get_items_list(permutation_str)
+        if len(permutation) != len(orig_list):
+            return False
+        for item in orig_list:
+            if item not in permutation:
+                return False
+        return True
+
+    lite_order = inquirer.text(
+        message="Arrange the days of the week in the order of liteness\n",
+        filter=get_items_list,
+        validate=lambda input_str: is_valid_permutation_str(input_str, WEEK_DAYS),
+        invalid_message="lite order must be a permutation of weekdays",
+    ).execute()
+
+    # lite_order = ["S", "Su", "M", "T", "W", "Th", "F"]
 
     filtered_json = get_filtered_json(tt_json, CDCs, DEls, HUELs, OPELs)
 
