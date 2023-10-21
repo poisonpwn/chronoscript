@@ -74,7 +74,6 @@ class AskUserInput:
 
     @staticmethod
     def _is_valid_permutation(result_list: List, orig_list: List):
-        print(f"{result_list = }")
         if len(result_list) != len(orig_list):
             return False
         for item in orig_list:
