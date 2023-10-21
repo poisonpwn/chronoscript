@@ -114,3 +114,17 @@ class AskUserInput:
         )
 
         return (lite_order, free_days)
+
+    @classmethod
+    def get_excluded_sections(cls, section_infos):
+        section_choices = []
+        for section_info in section_infos:
+            _, course_name, section = section_info
+            section_choices.append(
+                Choice(section_info, name=f"{course_name} - {section}")
+            )
+        return cls.fuzzy_select(
+            "Choose Excluded Sections: ",
+            section_choices,
+            default="NONE",
+        )

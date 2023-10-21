@@ -517,8 +517,16 @@ def export_to_json(timetables: list, filtered_json: dict, n_export: int = 100) -
     json.dump(export, open("./files/my_timetables.json", "w"), indent=4)
 
 
+def get_section_infos(filtered_json):
+    sections_list = []
+    for course_class, courses in filtered_json.items():
+        for course_name, course_dict in courses.items():
+            for section in course_dict["sections"].keys():
+                sections_list.append((course_class, course_name, section))
+    return sections_list
+
+
 if __name__ == "__main__":
-    # need to get these as inputs
     tt_json = json.load(open("./files/timetable.json", "r"))
     from prompt_user import AskUserInput
 
@@ -531,6 +539,12 @@ if __name__ == "__main__":
     (nDels, nOpels, nHuels) = (len(courses) for courses in electives)
     (DEls, HUELs, OPELs) = electives
     filtered_json = get_filtered_json(tt_json, CDC, DEls, HUELs, OPELs)
+
+    # remove excluded sections
+    section_infos = get_section_infos(filtered_json)
+    excluded_sections = AskUserInput.get_excluded_sections(section_infos)
+    for course_class, course_name, section in excluded_sections:
+        del filtered_json[course_class][course_name]["sections"][section]
 
     exhaustive_list_of_timetables = generate_exhaustive_timetables(
         filtered_json, nDels, nOpels, nHuels
