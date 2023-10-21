@@ -25,6 +25,7 @@ def get_filtered_json(
         dict: filtered json file, i.e, with only courses selected
     """
     json = json["courses"]
+
     filtered_json = {"CDCs": {}, "DEls": {}, "HUELs": {}, "OPELs": {}}
     for CDC in CDCs:
         filtered_json["CDCs"][CDC] = json[CDC]
@@ -518,92 +519,18 @@ def export_to_json(timetables: list, filtered_json: dict, n_export: int = 100) -
 
 if __name__ == "__main__":
     # need to get these as inputs
-
-    # load the json file created
-    from InquirerPy import inquirer
-
     tt_json = json.load(open("./files/timetable.json", "r"))
+    from prompt_user import AskUserInput
+
     possible_courses = list(tt_json["courses"].keys())
+    (CDC, *electives) = AskUserInput.course_info(possible_courses)
 
-    CDCs = inquirer.fuzzy(
-        message="Select CDCs",
-        choices=possible_courses,
-        multiselect=True,
-        max_height="70%",
-    ).execute()
+    (lite_order, free_days) = AskUserInput.work_load_spread()
+    pref = ["DEls", "OPELs", "HUELs"]  # unused why is this here?
 
-    for course in CDCs:
-        possible_courses.remove(course)
-
-    # Order the oreference of DELs, HUELs and OPELs
-    DEls = inquirer.fuzzy(
-        message="Select DEls",
-        choices=possible_courses,
-        filter=lambda result: result if result is not None else [],
-        default="NONE",
-        multiselect=True,
-        max_height="70%",
-    ).execute()
-    nDels = len(DEls)
-
-    for course in DEls:
-        possible_courses.remove(course)
-
-    OPELs = inquirer.fuzzy(
-        message="Select OPELs",
-        choices=possible_courses,
-        default="NONE",
-        multiselect=True,
-        max_height="70%",
-    ).execute()
-    nOpels = len(OPELs)
-
-    for course in OPELs:
-        possible_courses.remove(course)
-
-    HUELs = inquirer.fuzzy(
-        message="Select HUELs",
-        choices=possible_courses,
-        default="NONE",
-        multiselect=True,
-        max_height="70%",
-    ).execute()
-    nHuels = len(HUELs)
-
-    for course in HUELs:
-        possible_courses.remove(course)
-
-    pref = ["DEls", "OPELs", "HUELs"]
-
-    WEEK_DAYS = ["Su", "M", "T", "W", "Th", "F", "S"]
-    free_days = inquirer.fuzzy(
-        message="Select freedays",
-        choices=WEEK_DAYS,
-        multiselect=True,
-        max_height="70%",
-    ).execute()
-
-    get_items_list = lambda list_str: [day.strip() for day in list_str.split(",")]
-
-    def is_valid_permutation_str(permutation_str, orig_list):
-        permutation = get_items_list(permutation_str)
-        if len(permutation) != len(orig_list):
-            return False
-        for item in orig_list:
-            if item not in permutation:
-                return False
-        return True
-
-    lite_order = inquirer.text(
-        message="Arrange the days of the week in the order of liteness\n",
-        filter=get_items_list,
-        validate=lambda input_str: is_valid_permutation_str(input_str, WEEK_DAYS),
-        invalid_message="lite order must be a permutation of weekdays",
-    ).execute()
-
-    # lite_order = ["S", "Su", "M", "T", "W", "Th", "F"]
-
-    filtered_json = get_filtered_json(tt_json, CDCs, DEls, HUELs, OPELs)
+    (nDels, nOpels, nHuels) = (len(courses) for courses in electives)
+    (DEls, HUELs, OPELs) = electives
+    filtered_json = get_filtered_json(tt_json, CDC, DEls, HUELs, OPELs)
 
     exhaustive_list_of_timetables = generate_exhaustive_timetables(
         filtered_json, nDels, nOpels, nHuels
