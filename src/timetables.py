@@ -86,8 +86,8 @@ def separate_sections_into_types(
 
 
 def generate_intra_combinations(
-    filtered_json: Annotated[
-        dict, "filtered json file, i.e, with only courses selected"
+    sect_seperated_json: Annotated[
+        dict, "filtered json with courses seperated into sections"
     ],
 ) -> dict:
     """
@@ -100,30 +100,29 @@ def generate_intra_combinations(
         dict: dictionary of all possible combinations of sections within each course
     """
 
-    sep = separate_sections_into_types(filtered_json)
     combs = {}
-    for type in sep:
+    for type in sect_seperated_json:
         combs[type] = {}
-        for course in sep[type]:
+        for course in sect_seperated_json[type]:
             sections = []
             # first check is the type of section (L, T or P) is present in the course
-            if sep[type][course].get("L") is not None:
+            if sect_seperated_json[type][course].get("L") is not None:
                 # list of lecture sections
-                sections.append(sep[type][course]["L"])
-            if sep[type][course].get("P") is not None:
+                sections.append(sect_seperated_json[type][course]["L"])
+            if sect_seperated_json[type][course].get("P") is not None:
                 # list of practical sections
-                sections.append(sep[type][course]["P"])
-            if sep[type][course].get("T") is not None:
+                sections.append(sect_seperated_json[type][course]["P"])
+            if sect_seperated_json[type][course].get("T") is not None:
                 # list of tutorial sections
-                sections.append(sep[type][course]["T"])
+                sections.append(sect_seperated_json[type][course]["T"])
             # generate all possible combinations of sections (exhaustive and inclusive of clashes)
             combs[type][course] = list(product(*sections))
     return combs
 
 
 def generate_exhaustive_timetables(
-    filtered_json: Annotated[
-        dict, "filtered json file, i.e, with only courses selected"
+    sect_seperated_json: Annotated[
+        dict, "filtered json with courses seperated into sections"
     ],
     n_dels: Annotated[int, "number of DELs selected"],
     n_opels: Annotated[int, "number of OPELs selected"],
@@ -139,7 +138,7 @@ def generate_exhaustive_timetables(
         list: list of all possible timetables (exhaustive and inclusive of clashes)
     """
 
-    combs = generate_intra_combinations(filtered_json)
+    combs = generate_intra_combinations(sect_seperated_json)
     timetables = []
     cdcs = []
     dels = []
@@ -539,6 +538,7 @@ if __name__ == "__main__":
     (nDels, nOpels, nHuels) = (len(courses) for courses in electives)
     (DEls, HUELs, OPELs) = electives
     filtered_json = get_filtered_json(tt_json, CDC, DEls, HUELs, OPELs)
+    sect_seperated_json = separate_sections_into_types(filtered_json)
 
     # remove excluded sections
     section_infos = get_section_infos(filtered_json)
@@ -547,7 +547,7 @@ if __name__ == "__main__":
         del filtered_json[course_class][course_name]["sections"][section]
 
     exhaustive_list_of_timetables = generate_exhaustive_timetables(
-        filtered_json, nDels, nOpels, nHuels
+        sect_seperated_json, nDels, nOpels, nHuels
     )
 
     timetables_without_clashes = remove_clashes(
