@@ -1,14 +1,21 @@
 from InquirerPy import inquirer
+from InquirerPy.base.control import Choice
 from typing import List
+from functools import wraps
 
 
 class AskUserInput:
     WEEK_DAYS = ["Su", "M", "T", "W", "Th", "F", "S"]
 
     @staticmethod
-    def fuzzy_select(*args, multiselect=True, height="70%", **kwargs):
+    @wraps(inquirer.fuzzy)
+    def fuzzy_select(
+        prompt_message, choices, *args, multiselect=True, height="70%", **kwargs
+    ):
         handle = inquirer.fuzzy(
             *args,
+            message=prompt_message,
+            choices=choices,
             multiselect=multiselect,
             height=height,
             **kwargs,
@@ -16,8 +23,9 @@ class AskUserInput:
         return handle.execute()
 
     @staticmethod
-    def ask_text(*args, **kwargs):
-        handle = inquirer.text(*args, **kwargs)
+    @wraps(inquirer.text)
+    def ask_text(prompt_message, *args, **kwargs):
+        handle = inquirer.text(message=prompt_message, *args, **kwargs)
         return handle.execute()
 
     @classmethod
@@ -42,8 +50,8 @@ class AskUserInput:
             course_choices.remove(course)
 
         DEls = cls.fuzzy_select(
-            message="Select DEls",
-            choices=course_choices,
+            "Select DEls",
+            course_choices,
             default="NONE",
         )
 
@@ -51,8 +59,8 @@ class AskUserInput:
             course_choices.remove(course)
 
         OPEls = cls.fuzzy_select(
-            message="Select OPELs",
-            choices=course_choices,
+            "Select OPELs",
+            course_choices,
             default="NONE",
         )
 
@@ -60,8 +68,8 @@ class AskUserInput:
             course_choices.remove(course)
 
         HUEls = cls.fuzzy_select(
-            message="Select HUELs",
-            choices=course_choices,
+            "Select HUELs",
+            course_choices,
             default="NONE",
         )
 
@@ -92,12 +100,12 @@ class AskUserInput:
         in terms of free days and  liteness order of the weekdays.
         """
         free_days = cls.fuzzy_select(
-            message="Select freedays",
-            choices=cls.WEEK_DAYS,
+            "Select freedays",
+            cls.WEEK_DAYS,
         )
 
         lite_order = cls.ask_text(
-            message="Arrange the days of the week in the order of liteness\n",
+            "Arrange the days of the week in the order of liteness\n",
             filter=cls._get_items_list,
             validate=lambda input_str: cls._is_valid_permutation(
                 cls._get_items_list(input_str), cls.WEEK_DAYS
