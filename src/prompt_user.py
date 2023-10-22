@@ -1,7 +1,11 @@
 from InquirerPy import inquirer
-from InquirerPy.base.control import Choice
-from typing import List
-from functools import wraps
+from InquirerPy.base.control import Choice as InquirerPyChoice
+from typing import Optional
+from operator import getitem
+from functools import wraps, partial, reduce
+from collections import defaultdict
+
+Choice = InquirerPyChoice
 
 
 class AskUserInput:
@@ -10,8 +14,26 @@ class AskUserInput:
     @staticmethod
     @wraps(inquirer.fuzzy)
     def fuzzy_select(
-        prompt_message, choices, *args, multiselect=True, height="70%", **kwargs
+        prompt_message,
+        choices,
+        *args,
+        multiselect=True,
+        height="70%",
+        **kwargs,
     ):
+        """
+        select one (or more,if multiselect is enabled) out of the given set of choices
+        by fuzzy matching the option name with the user input
+
+        Args:
+            prompt_message(str): the prompt string to use to prompt user
+            choices(list): the list of possible choices values,
+                of which the return list will be a subset of. (flattened if multiselect is disabled)
+            multiselect(bool): whether to allow the user to select multiple choices out of the given ones.
+
+        Returns:
+            selection or list of selections if multiselect is disabled or enabled respectively
+        """
         handle = inquirer.fuzzy(
             *args,
             message=prompt_message,
@@ -29,9 +51,10 @@ class AskUserInput:
         return handle.execute()
 
     @classmethod
-    def course_info(cls, course_choices: List[str]):
+    def course_info(cls, course_choices: list[str]):
         """
-        get user's selection of courses
+        get user's selection of courses for seperated into each class
+        of courses i.e CDC, DEL, OPEL, HUEL
 
         Args:
 
@@ -81,7 +104,7 @@ class AskUserInput:
         )
 
     @staticmethod
-    def _is_valid_permutation(result_list: List, orig_list: List):
+    def _is_valid_permutation(result_list: list, orig_list: list):
         if len(result_list) != len(orig_list):
             return False
         for item in orig_list:
@@ -94,7 +117,7 @@ class AskUserInput:
         return [day.strip() for day in list_str.split(",")]
 
     @classmethod
-    def work_load_spread(cls):
+    def work_load_spread(cls, **kwargs):
         """
         get user's preferences of workload spread over the week,
         in terms of free days and  liteness order of the weekdays.
@@ -111,20 +134,72 @@ class AskUserInput:
                 cls._get_items_list(input_str), cls.WEEK_DAYS
             ),
             invalid_message="lite order must be a permutation of weekdays",
+            **kwargs,
         )
 
         return (lite_order, free_days)
 
-    @classmethod
-    def get_excluded_sections(cls, section_infos):
-        section_choices = []
-        for section_info in section_infos:
-            _, course_name, section = section_info
-            section_choices.append(
-                Choice(section_info, name=f"{course_name} - {section}")
+    @staticmethod
+    def _non_empty_sections_validator(
+        excluded_section_indices: Optional[list[tuple]],
+        sect_seperated_json: dict,
+    ):
+        """
+        validation predicate that checks (returns true),
+        if all sections of section type of any course
+        have not been excluded i.e that there is atleast one
+        section left in each of the section types for each of the courses.
+
+        Args:
+            sect_seperated_json: filtered json containing course
+              sections seperated by section type
+            excluded_section_indices: tuple indices of the sect_seperated_json
+        """
+        # if no sections are selected return immediately
+        # (the default choice NONE matches nothing)
+        if not excluded_section_indices:
+            return True
+
+        # dict of the form
+        # {(course_class, course_name, section_type): [<excluded section numbers>]}
+        excluded_sections_info = defaultdict(set)
+        for parent_index_tuple, section in excluded_section_indices:
+            excluded_sections_info[parent_index_tuple].add(section)
+
+        for parent_index_tuple, excluded_sections in excluded_sections_info.items():
+            all_course_sections_of_type = set(
+                # use keys in order of appearence in parent index tuple
+                # to index deeper into the dict
+                # reduce(getitem, ('a','b','c'), {'a':{'b':{'c': "hello"}}}) -> "hello"
+                reduce(
+                    getitem,
+                    parent_index_tuple,
+                    sect_seperated_json,
+                )
             )
+
+            # compute difference of all courses minus the excluded courses
+            # to get not excluded courses
+            sections_not_excluded = all_course_sections_of_type.difference(
+                excluded_sections
+            )
+            return len(sections_not_excluded) != 0
+
+    @classmethod
+    def get_excluded_sections(
+        cls,
+        section_choices,
+        sect_seperated_json,
+        **kwargs,
+    ):
         return cls.fuzzy_select(
             "Choose Excluded Sections: ",
             section_choices,
             default="NONE",
+            validate=partial(
+                cls._non_empty_sections_validator,
+                sect_seperated_json=sect_seperated_json,
+            ),
+            invalid_message="Cannot exclude all courses of a type",
+            **kwargs,
         )

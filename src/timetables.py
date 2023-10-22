@@ -2,6 +2,7 @@ import json
 from itertools import product, combinations
 from operator import itemgetter
 from typing import Annotated
+from prompt_user import AskUserInput, Choice
 
 
 def get_filtered_json(
@@ -516,35 +517,65 @@ def export_to_json(timetables: list, filtered_json: dict, n_export: int = 100) -
     json.dump(export, open("./files/my_timetables.json", "w"), indent=4)
 
 
-def get_section_infos(filtered_json):
-    sections_list = []
-    for course_class, courses in filtered_json.items():
+def get_excluded_section_choices(sect_seperated_json):
+    """
+    function returns list of choices objects for every section of every course
+    in which each choice object returns the index of the section as a tuple
+
+    Args:
+        sect_seperated_json: filtered json in which sections
+          of each course are sepererated into course types
+          with nested index of the form (course_class, course_name,
+          section_type, section)
+    """
+    section_exclude_choices = []
+    # create a choice object for every section of every course
+    # which will be used for fuzzy selecting
+    for course_class, courses in sect_seperated_json.items():
         for course_name, course_dict in courses.items():
-            for section in course_dict["sections"].keys():
-                sections_list.append((course_class, course_name, section))
-    return sections_list
+            for section_type, sections in course_dict.items():
+                for section in sections:
+                    # the fuzzy selector will return this kind of index tuple (to index into
+                    # sect_seperated_json) for each of the courses
+                    # the user wishes to exclude
+                    excluded_section_info = (
+                        (course_class, course_name, section_type),
+                        section,
+                    )
+                    section_exclude_choices.append(
+                        Choice(
+                            # this is the actual value that is added to the selection list
+                            excluded_section_info,
+                            # this value is shown to the user for selection
+                            name=f"{course_name} - {section}",
+                        )
+                    )
+    return section_exclude_choices
 
 
 if __name__ == "__main__":
     tt_json = json.load(open("./files/timetable.json", "r"))
-    from prompt_user import AskUserInput
 
+    # has to be a list since dict_keys is not pickelable for prompt tools
     possible_courses = list(tt_json["courses"].keys())
-    (CDC, *electives) = AskUserInput.course_info(possible_courses)
+    CDC, *electives = AskUserInput.course_info(possible_courses)
 
     (lite_order, free_days) = AskUserInput.work_load_spread()
     pref = ["DEls", "OPELs", "HUELs"]  # unused why is this here?
 
-    (nDels, nOpels, nHuels) = (len(courses) for courses in electives)
-    (DEls, HUELs, OPELs) = electives
+    nDels, nOpels, nHuels = (len(courses) for courses in electives)
+    DEls, HUELs, OPELs = electives
     filtered_json = get_filtered_json(tt_json, CDC, DEls, HUELs, OPELs)
     sect_seperated_json = separate_sections_into_types(filtered_json)
 
-    # remove excluded sections
-    section_infos = get_section_infos(filtered_json)
-    excluded_sections = AskUserInput.get_excluded_sections(section_infos)
-    for course_class, course_name, section in excluded_sections:
-        del filtered_json[course_class][course_name]["sections"][section]
+    excluded_sections = AskUserInput.get_excluded_sections(
+        get_excluded_section_choices(sect_seperated_json),
+        sect_seperated_json,
+    )
+
+    # remove all excluded sections
+    for (course_class, course_name, section_type), section in excluded_sections:
+        sect_seperated_json[course_class][course_name][section_type].remove(section)
 
     exhaustive_list_of_timetables = generate_exhaustive_timetables(
         sect_seperated_json, nDels, nOpels, nHuels
