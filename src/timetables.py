@@ -218,25 +218,28 @@ def remove_clashes(
         times: dict[str, bool] = dict()
         clashes = False
         for course in timetable:
-            # course[1] as that has the section details, course[0] hold course code
-            for sec in course[1]:
-                # the schedule of the section from the main json file
-                if course[0] in json["CDCs"]:
-                    sched = json["CDCs"][course[0]]["sections"][sec]["schedule"]
-                elif course[0] in json["DEls"]:
-                    sched = json["DEls"][course[0]]["sections"][sec]["schedule"]
-                elif course[0] in json["HUELs"]:
-                    sched = json["HUELs"][course[0]]["sections"][sec]["schedule"]
-                elif course[0] in json["OPELs"]:
-                    sched = json["OPELs"][course[0]]["sections"][sec]["schedule"]
-                else:
-                    raise Exception("Course code not found in any category")
+            course_code, sections_chosen = course
+
+            # find out which class the course belongs to and
+            # get all sections of the course
+            for course_class in ["CDCs", "DEls", "HUELs", "OPELs"]:
+                if course_code in json[course_class]:
+                    all_sections = json[course_class][course_code]["sections"]
+                    break
+            else:
+                raise Exception("Course code not found in any category")
+
+            for sec in sections_chosen:
+                sched = all_sections[sec]["schedule"]
+
                 # ts denotes all slots needed for the section
                 ts = []
                 for i in range(len(sched)):
                     ts.extend(list(product(sched[i]["days"], sched[i]["hours"])))
+
                 # converting it to the string of required format "DH"
                 ts = [str(t[0]) + str(t[1]) for t in ts]
+
                 # if any slot in ts is already in times, then there is a clash
                 # if so, mark it as clashes and dont add it to the filtered list
                 for t in ts:
@@ -245,10 +248,12 @@ def remove_clashes(
                         break
                     else:
                         times[t] = True
+
                 if clashes:
                     break
             if clashes:
                 break
+
         # if no clashes, add it to the filtered list
         if not clashes:
             filtered.append(timetable)
@@ -276,33 +281,32 @@ def remove_exam_clashes(
         compres_times: dict[str, int] = dict()
         clashes = False
         for course in timetable:
-            # get exam times
-            if course[0] in json["CDCs"]:
-                mid = json["CDCs"][course[0]]["exams"][0].get("midsem", "")
-                compre = json["CDCs"][course[0]]["exams"][0].get("compre", "")
-            elif course[0] in json["DEls"]:
-                mid = json["DEls"][course[0]]["exams"][0].get("midsem", "")
-                compre = json["DEls"][course[0]]["exams"][0].get("compre", "")
-            elif course[0] in json["HUELs"]:
-                mid = json["HUELs"][course[0]]["exams"][0].get("midsem", "")
-                compre = json["HUELs"][course[0]]["exams"][0].get("compre", "")
-            elif course[0] in json["OPELs"]:
-                mid = json["OPELs"][course[0]]["exams"][0].get("midsem", "")
-                compre = json["OPELs"][course[0]]["exams"][0].get("compre", "")
+            course_code, _ = course
+
+            # get from the json
+            for course_class in ["CDCs", "DEls", "HUELs", "OPELs"]:
+                if course_code in json[course_class]:
+                    exams_times = json[course_class][course_code]["exams"][0]
+                    break
             else:
                 raise Exception("Course code not found in any category")
+            mid = exams_times.get("midsem", "")
+            compre = exams_times.get("compre", "")
+
             mids_times[mid] = mids_times.get(mid, 0) + 1
             compres_times[compre] = compres_times.get(compre, 0) + 1
+
         # see if more than one course has the same exam time
         for time in mids_times:
-            if mids_times[time] > 1 and time != None:
+            if mids_times[time] > 1 and time is not None:
                 clashes = True
                 break
         if not clashes:
             for time in compres_times:
-                if compres_times[time] > 1 and time != None:
+                if compres_times[time] > 1 and time is not None:
                     clashes = True
                     break
+
         # for i in range(len(mids_times)):
         #     for j in range(i + 1, len(mids_times)):
         #         if mids_times[i] == mids_times[j]:
@@ -322,6 +326,48 @@ def remove_exam_clashes(
         if not clashes:
             no_exam_clashes.append(timetable)
     return no_exam_clashes
+
+
+def get_daywise_schedule(
+    cf_timetable: Annotated[list, "timetable without clashes"],
+    json: Annotated[dict, "filtered json file"],
+):
+    """
+    Returns dictionary containing the hour numbers (1 -> 8-9AM etc)
+    of classes for each weekday for the provided timetable
+
+    the timetable must not have any clashes.
+
+    Args:
+        cf_timetable (list[tuple]): timetable without clashes
+        json (dict): filtered json file, i.e, with only courses selected
+    """
+    schedule = {
+        "M": [],
+        "T": [],
+        "W": [],
+        "Th": [],
+        "F": [],
+        "S": [],
+        "Su": [],
+    }
+    for course in cf_timetable:
+        course_code, sections_chosen = course
+        # get from the json
+        for course_class in ["CDCs", "DEls", "HUELs", "OPELs"]:
+            if course_code in json[course_class]:
+                all_sections = json[course_class][course_code]["sections"]
+                break
+        else:
+            raise Exception("Course code not found in any category")
+
+        for sec in sections_chosen:
+            sched = all_sections[sec]["schedule"]
+            # since no clashes, we can just append the hours to the schedule
+            for i in range(len(sched)):
+                for day in sched[i]["days"]:
+                    schedule[day].append(sched[i]["hours"])
+    return schedule
 
 
 def day_wise_filter(
@@ -367,34 +413,10 @@ def day_wise_filter(
     for timetable in timetables:
         # will contain the hours of each day where there is a class
         # used for calculating the daily scores and if it matches the free days
-        schedule = {
-            "M": [],
-            "T": [],
-            "W": [],
-            "Th": [],
-            "F": [],
-            "S": [],
-            "Su": [],
-        }
-        for course in timetable:
-            for sec in course[1]:
-                # getting the schedule of the selected section
-                if course[0] in json["CDCs"]:
-                    sched = json["CDCs"][course[0]]["sections"][sec]["schedule"]
-                elif course[0] in json["DEls"]:
-                    sched = json["DEls"][course[0]]["sections"][sec]["schedule"]
-                elif course[0] in json["HUELs"]:
-                    sched = json["HUELs"][course[0]]["sections"][sec]["schedule"]
-                elif course[0] in json["OPELs"]:
-                    sched = json["OPELs"][course[0]]["sections"][sec]["schedule"]
-                else:
-                    raise Exception("Course code not found in any category")
-                # since no clashes, we can just append the hours to the schedule
-                for i in range(len(sched)):
-                    for day in sched[i]["days"]:
-                        schedule[day].append(sched[i]["hours"])
+
+        schedule = get_daywise_schedule(timetable, json)
         # calculating the daily scores
-        daily_scores = [len(v) for k, v in schedule.items()]
+        daily_scores = [len(v) for _, v in schedule.items()]
         # reordering the daily scores to match the lite order
         daily_scores = [daily_scores[day_dict[day]] for day in lite_order]
 
@@ -403,7 +425,9 @@ def day_wise_filter(
             if len(schedule[day]) == 0:
                 n_free += 1
 
-        # if not strong filter, then if atleast some of the required free days are free, then add it to the list
+        # if not strong filter,
+        # then if atleast some of the required free days are free,
+        # then add it to the list
         if n_free > 0 and not strong:
             matches_free_days.append((n_free, daily_scores, timetable))
         elif n_free == len(free_days):
@@ -411,9 +435,17 @@ def day_wise_filter(
         else:
             others.append((n_free, daily_scores, timetable))
 
-    # sorting based on the number of free days (descending) and then the daily scores (ascending)
-    matches_free_days = sorted(matches_free_days, key=itemgetter(0), reverse=True)
-    matches_free_days = sorted(matches_free_days, key=itemgetter(1))
+    # sorting based on the number of free days (descending)
+    # and then the daily scores (ascending)
+    matches_free_days = sorted(
+        matches_free_days,
+        key=itemgetter(0),
+        reverse=True,
+    )
+    matches_free_days = sorted(
+        matches_free_days,
+        key=itemgetter(1),
+    )
 
     others = sorted(others, key=itemgetter(0), reverse=True)
     others = sorted(others, key=itemgetter(1))
