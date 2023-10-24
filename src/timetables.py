@@ -1,6 +1,5 @@
 import json
 from itertools import product, combinations
-from operator import itemgetter
 from typing import Annotated
 from prompt_user import AskUserInput, Choice
 
@@ -290,6 +289,7 @@ def remove_exam_clashes(
                     break
             else:
                 raise Exception("Course code not found in any category")
+
             mid = exams_times.get("midsem", "")
             compre = exams_times.get("compre", "")
 
@@ -351,6 +351,7 @@ def get_daywise_schedule(
         "S": [],
         "Su": [],
     }
+
     for course in cf_timetable:
         course_code, sections_chosen = course
         # get from the json
@@ -367,6 +368,7 @@ def get_daywise_schedule(
             for i in range(len(sched)):
                 for day in sched[i]["days"]:
                     schedule[day].append(sched[i]["hours"])
+
     return schedule
 
 
@@ -400,23 +402,16 @@ def day_wise_filter(
     # format: (daily scores in a list [0, 4, 5, ...], timetable)
     others: list[tuple] = []
 
-    day_dict = {
-        "M": 0,
-        "T": 1,
-        "W": 2,
-        "Th": 3,
-        "F": 4,
-        "S": 5,
-        "Su": 6,
-    }
+    days = ["M", "T", "W", "Th", "F", "S", "Su"]
+    day_dict = {day: i for i, day in enumerate(days)}
 
     for timetable in timetables:
         # will contain the hours of each day where there is a class
         # used for calculating the daily scores and if it matches the free days
-
         schedule = get_daywise_schedule(timetable, json)
         # calculating the daily scores
         daily_scores = [len(v) for _, v in schedule.items()]
+
         # reordering the daily scores to match the lite order
         daily_scores = [daily_scores[day_dict[day]] for day in lite_order]
 
@@ -425,60 +420,48 @@ def day_wise_filter(
             if len(schedule[day]) == 0:
                 n_free += 1
 
+        does_match_free_days = (n_free > 0 and not strong) or n_free == len(free_days)
+
         # if not strong filter,
         # then if atleast some of the required free days are free,
         # then add it to the list
-        if n_free > 0 and not strong:
-            matches_free_days.append((n_free, daily_scores, timetable))
-        elif n_free == len(free_days):
-            matches_free_days.append((n_free, daily_scores, timetable))
+        decorated_tt = (n_free, daily_scores, timetable)
+        if does_match_free_days:
+            matches_free_days.append(decorated_tt)
         else:
-            others.append((n_free, daily_scores, timetable))
+            others.append(decorated_tt)
 
     # sorting based on the number of free days (descending)
     # and then the daily scores (ascending)
-    matches_free_days = sorted(
-        matches_free_days,
-        key=itemgetter(0),
-        reverse=True,
-    )
-    matches_free_days = sorted(
-        matches_free_days,
-        key=itemgetter(1),
-    )
+    def sort_tt(decorated_tt):
+        n_free, daily_scores, _ = decorated_tt
+        return (daily_scores, -n_free)
 
-    others = sorted(others, key=itemgetter(0), reverse=True)
-    others = sorted(others, key=itemgetter(1))
+    matches_free_days = sorted(matches_free_days, key=sort_tt)
+    others = sorted(others, key=sort_tt)
 
-    # reorder back to original order (M, T, W, Th, F, S, Su)
-    original_order = {
-        "M": lite_order.index("M"),
-        "T": lite_order.index("T"),
-        "W": lite_order.index("W"),
-        "Th": lite_order.index("Th"),
-        "F": lite_order.index("F"),
-        "S": lite_order.index("S"),
-        "Su": lite_order.index("Su"),
-    }
+    lite_order_index = {}
+    for i, day in enumerate(lite_order):
+        lite_order_index[day] = i
+
     for i in range(len(matches_free_days)):
         matches_free_days[i] = (
             matches_free_days[i][0],
-            [matches_free_days[i][1][original_order[day]] for day in original_order],
+            [matches_free_days[i][1][lite_order_index[day]] for day in days],
             matches_free_days[i][2],
         )
 
     for i in range(len(others)):
         others[i] = (
             others[i][0],
-            [others[i][1][original_order[day]] for day in original_order],
+            [others[i][1][lite_order_index[day]] for day in day_dict.keys()],
             others[i][2],
         )
 
     if filter:
-        return [i for i in matches_free_days]
-
+        return matches_free_days
     else:
-        return [i for i in matches_free_days] + [i for i in others]
+        return matches_free_days + others
 
 
 def export_to_json(timetables: list, filtered_json: dict, n_export: int = 100) -> None:
