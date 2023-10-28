@@ -232,6 +232,12 @@ class AskUserInput:
         sect_seperated_json,
         **kwargs,
     ):
+        """asks users for sections which should not be included in the timetable
+
+        Args:
+            section_choices  (List[Union[Choice, str]]): the choices which are to be passed to fuzzy selector
+            sect_seperated_json (Dict): filtered json with each section seperated by section type
+        """
         return cls.fuzzy_select(
             "Choose Excluded Sections: ",
             section_choices,
