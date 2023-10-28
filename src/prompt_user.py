@@ -104,6 +104,46 @@ class AskUserInput:
         )
 
     @staticmethod
+    def is_valid_elective_number(num_str: str, n_elective_courses):
+        try:
+            num = int(num_str)
+            return 0 < num <= n_elective_courses
+        except ValueError:
+            return False
+
+    @classmethod
+    def ask_number_of_each_elective(
+        cls, total_electives_number
+    ) -> tuple[int, int, int]:
+        """fetches the number of each elective type that the user
+        wants in their timetable
+
+        Args:
+            total_electives_number(tuple): tuple containing total number of courses within
+              each elective class. in the order DEl, OPEls, HUEls
+
+
+        Returns:
+            tuple containing the user's choice of size of each electives class.
+            in the order DEls, OPEls, HUels.
+        """
+        COURSE_CLASS_ORDER = ("DEls", "OPEls", "HUEls")
+        result_list = [0, 0, 0]
+        for i, (total_courses, course_class) in enumerate(
+            zip(total_electives_number, COURSE_CLASS_ORDER)
+        ):
+            if total_courses != 0:
+                result_list[i] = cls.ask_text(
+                    f"How many {course_class} should be included in the timetable?",
+                    validator=partial(
+                        cls.is_valid_elective_number,
+                        n_elective_courses=total_courses,
+                    ),
+                )
+
+        return tuple(result_list)
+
+    @staticmethod
     def _is_valid_permutation(result_list: list, orig_list: list):
         if len(result_list) != len(orig_list):
             return False
