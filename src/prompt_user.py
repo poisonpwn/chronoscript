@@ -83,8 +83,7 @@ class AskUserInput:
             tuple of lists in the order CDCs, DELs, OPELs, HUELs
         """
         CDCs = cls.fuzzy_select(
-            "Select CDCs",
-            choices=course_choices,
+            "Select CDCs", choices=course_choices, validate=lambda li: bool(li)
         )
 
         for course in CDCs:
@@ -167,6 +166,7 @@ class AskUserInput:
                         cls._in_bounds,
                         upper_bound=total_courses,
                     ),
+                    invalid_message=f"number should be between 1 and {total_courses} inclusive",
                 )
 
         return tuple(result_list)
