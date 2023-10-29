@@ -47,6 +47,12 @@ class AskUserInput:
     @staticmethod
     @wraps(inquirer.text)
     def ask_text(prompt_message, *args, **kwargs):
+        """ask for text input from user
+
+        Args:
+            prompt_message(str): the message to prompt the user with
+            *args, *kwargs are additional parameters to inquirerpy
+        """
         handle = inquirer.text(message=prompt_message, *args, **kwargs)
         return handle.execute()
 
@@ -104,10 +110,18 @@ class AskUserInput:
         )
 
     @staticmethod
-    def is_valid_elective_number(num_str: str, n_elective_courses):
+    def _in_bounds(num_str: str, upper_bound):
+        """validator predicate that checks if a number is between an upper
+        bound and zero.
+
+        Args:
+            num_str: the string of the number to be checked
+            upper_bound: the upper bound that is allowed
+              for the number
+        """
         try:
             num = int(num_str)
-            return 0 < num <= n_elective_courses
+            return 0 < num <= upper_bound
         except ValueError:
             return False
 
@@ -119,13 +133,14 @@ class AskUserInput:
         wants in their timetable
 
         Args:
-            total_electives_number(tuple): tuple containing total number of courses within
-              each elective class. in the order DEl, OPEls, HUEls
+            total_electives_number(tuple): tuple containing total number
+              of courses within each elective class.
+              in the order DEl, OPEls, HUEls
 
 
         Returns:
             tuple containing the user's choice of size of each electives class.
-            in the order DEls, OPEls, HUels.
+            in the order DEls, OPEls, HUELs.
         """
         COURSE_CLASS_ORDER = ("DEls", "OPEls", "HUEls")
         result_list = [0, 0, 0]
@@ -135,16 +150,18 @@ class AskUserInput:
             if total_courses != 0:
                 result_list[i] = cls.ask_text(
                     f"How many {course_class} should be included in the timetable?",
-                    validator=partial(
-                        cls.is_valid_elective_number,
-                        n_elective_courses=total_courses,
+                    filter=int,
+                    validate=partial(
+                        cls._in_bounds,
+                        upper_bound=total_courses,
                     ),
                 )
 
         return tuple(result_list)
 
     @staticmethod
-    def _is_valid_permutation(result_list: list, orig_list: list):
+    def _is_permutation(result_list: list, orig_list: list):
+        """validator predicate that returns"""
         if len(result_list) != len(orig_list):
             return False
         for item in orig_list:
@@ -170,7 +187,7 @@ class AskUserInput:
         lite_order = cls.ask_text(
             "Arrange the days of the week in the order of liteness\n",
             filter=cls._get_items_list,
-            validate=lambda input_str: cls._is_valid_permutation(
+            validate=lambda input_str: cls._is_permutation(
                 cls._get_items_list(input_str), cls.WEEK_DAYS
             ),
             invalid_message="lite order must be a permutation of weekdays",
