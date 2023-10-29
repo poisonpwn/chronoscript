@@ -1,7 +1,14 @@
 import json
 from itertools import product, combinations
-from typing import Annotated
+from typing import Annotated, Optional
 from prompt_user import AskUserInput, Choice
+from sort_heuristics import ExamSpread
+
+DAYS = ["M", "T", "W", "Th", "F", "S", "Su"]
+EXAM_FIT_STRATEGIES = {
+    "Close Together": 1,
+    "Spaced Apart": -1,
+}
 
 
 def get_filtered_json(
@@ -342,15 +349,8 @@ def get_daywise_schedule(
         cf_timetable (list[tuple]): timetable without clashes
         json (dict): filtered json file, i.e, with only courses selected
     """
-    schedule = {
-        "M": [],
-        "T": [],
-        "W": [],
-        "Th": [],
-        "F": [],
-        "S": [],
-        "Su": [],
-    }
+
+    schedule = {day: list() for day in DAYS}
 
     for course in cf_timetable:
         course_code, sections_chosen = course
@@ -372,7 +372,7 @@ def get_daywise_schedule(
     return schedule
 
 
-def day_wise_filter(
+def sort_acc_to_heuristics(
     timetables: Annotated[list, "list of timetables without clashes"],
     json: Annotated[dict, "filtered json file"],
     free_days: Annotated[list[str], "list of days to be free if possible"],
@@ -380,88 +380,120 @@ def day_wise_filter(
         list[str],
         "increasing order of how lite you want days to be (earlier means more lite)",
     ],
+    exam_fit_strategy: Optional[str] = None,
+    filter_exams_on_same_day=False,
     filter: Annotated[bool, "whether to filter or to just sort"] = False,
     strong: Annotated[bool, "whether to use strong filter or not"] = False,
 ) -> list:
     """
-    Function that filters out timetables based on the number of free days and the lite order. Lite order is the order in which you want the days to be lite. For example, if you want Saturday to be the most lite day, then lite_order = ["S", "Su", "M", "T", "W", "Th", "F"] (set the order of the other 6 accordingly))
+    Function that will sort all timetables based on whether the timetable
+    matches free days, the lite order, the total number of free days, and
+    exam fit strategy, and whether to filter exams on same day.
+
+    Note:
+      exam fit strategy, if specified, can be "Close Together" or "Spaced Apart".
+
+      Lite order is the order in which you want the days to be lite. For example, if you want Saturday to be the most lite day, then lite_order = ["S", "Su", "M", "T", "W", "Th", "F"] (set the order of the other 6 accordingly)
 
     Args:
         timetables (list): list of timetables without clashes
         json (dict): filtered json file, i.e, with only courses selected
         free_days (list): list of days to be free if possible
         lite_order (list): increasing order of how lite you want days to be (earlier means more lite)
+        exam_fit_strategy (str, optional): the strategy to use to sort exam spread seconds
+        filter_exams_on_same_day (bool): whether to reduce rank of timetables which have exams on same day
         filter (bool, optional): whether to filter or to just sort. Defaults to False.
         strong (bool, optional): whether to use strong filter or not. Defaults to False.
 
     Returns:
-        list: list of timetables after filtering. They are sorted based on how many of the free days they have and how lite the days are.
+        list: list of timetables after sorting.
     """
-    # format: (n days matched free, timetable)
-    matches_free_days: list[tuple] = []
-    # format: (daily scores in a list [0, 4, 5, ...], timetable)
-    others: list[tuple] = []
 
-    days = ["M", "T", "W", "Th", "F", "S", "Su"]
-    day_dict = {day: i for i, day in enumerate(days)}
+    # sort order mask is a multiplier mask whose elements act on heuristic to
+    # determine ordering
+    day_dict = {day: i for i, day in enumerate(DAYS)}
+    result_list = []
+
+    sort_order_mask = [
+        1,  # does_match_free_days -> ascending
+        1,  # daily_scores -> ascending
+        -1,  # n_free -> descending
+    ]
+
+    exam_spread_handler = ExamSpread(json)
+
+    if filter_exams_on_same_day:
+        sort_order_mask.append(-1)  # timetables which have a clash are ranked lower
+
+    if exam_fit_strategy is not None:
+        assert exam_fit_strategy in EXAM_FIT_STRATEGIES
+        # ascending or descending based on which strategy is chosen
+        sort_order_mask.append(EXAM_FIT_STRATEGIES[exam_fit_strategy])
+
+    def get_sort_key(decorated_tt):
+        heuristics, _ = decorated_tt
+        return tuple(
+            [
+                multiplier * heuristic
+                for multiplier, heuristic in zip(sort_order_mask, heuristics)
+            ]
+        )
 
     for timetable in timetables:
-        # will contain the hours of each day where there is a class
+        # will contain the hours of each day where there is a class.
         # used for calculating the daily scores and if it matches the free days
         schedule = get_daywise_schedule(timetable, json)
-        # calculating the daily scores
-        daily_scores = [len(v) for _, v in schedule.items()]
+        heuristics = []
 
-        # reordering the daily scores to match the lite order
-        daily_scores = [daily_scores[day_dict[day]] for day in lite_order]
+        # --- append heuristics in the order of their priority ---
 
+        # calulate number of free days
         n_free = 0
         for day in free_days:
             if len(schedule[day]) == 0:
                 n_free += 1
 
         does_match_free_days = (n_free > 0 and not strong) or n_free == len(free_days)
+        if filter and not does_match_free_days:
+            continue
 
-        # if not strong filter,
-        # then if atleast some of the required free days are free,
-        # then add it to the list
-        decorated_tt = (n_free, daily_scores, timetable)
-        if does_match_free_days:
-            matches_free_days.append(decorated_tt)
-        else:
-            others.append(decorated_tt)
+        heuristics.append(does_match_free_days)
 
-    # sorting based on the number of free days (descending)
-    # and then the daily scores (ascending)
-    def sort_tt(decorated_tt):
-        n_free, daily_scores, _ = decorated_tt
-        return (daily_scores, -n_free)
+        # calculating the daily scores and reordering them acc to lite order
+        daily_scores = [len(schedule[day]) for day in DAYS]
+        daily_scores = [daily_scores[day_dict[day]] for day in lite_order]
 
-    matches_free_days = sorted(matches_free_days, key=sort_tt)
-    others = sorted(others, key=sort_tt)
+        heuristics.append(daily_scores)
+        heuristics.append(n_free)
 
-    lite_order_index = {}
-    for i, day in enumerate(lite_order):
-        lite_order_index[day] = i
+        total_spread_seconds, exam_on_same_day = exam_spread_handler.compute(timetable)
 
-    for i in range(len(matches_free_days)):
-        matches_free_days[i] = (
-            matches_free_days[i][0],
-            [matches_free_days[i][1][lite_order_index[day]] for day in days],
-            matches_free_days[i][2],
+        if filter_exams_on_same_day:
+            heuristics.append(exam_on_same_day)
+
+        if exam_fit_strategy is not None:
+            heuristics.append(total_spread_seconds)
+
+        # decorate timetable with the heuristics
+        decorated_tt = (
+            tuple(heuristics),
+            timetable,
         )
+        result_list.append(decorated_tt)
 
-    for i in range(len(others)):
-        others[i] = (
-            others[i][0],
-            [others[i][1][lite_order_index[day]] for day in day_dict.keys()],
-            others[i][2],
-        )
+    result_list = sorted(result_list, key=get_sort_key)
 
-    if filter:
-        return matches_free_days
-    else:
-        return matches_free_days + others
+    lite_order_index = {day: i for i, day in enumerate(lite_order)}
+
+    # reorder the daily scores back to Monday to Friday
+    for i in range(len(result_list)):
+        heuristics, timetable = result_list[i]
+        before, daily_scores, *after = heuristics
+        daily_scores = [daily_scores[lite_order_index[day]] for day in DAYS]
+        heuristics = tuple([before, daily_scores, *after])
+        result_list[i] = (heuristics, timetable)
+
+    return result_list
 
 
 def export_to_json(timetables: list, filtered_json: dict, n_export: int = 100) -> None:
@@ -477,12 +509,12 @@ def export_to_json(timetables: list, filtered_json: dict, n_export: int = 100) -
         None
     """
     export = []
-    for timetable in timetables:
+    for (_, daily_scores, n_free, *_), timetable in timetables:
         export_tt = {}
-        export_tt["free_matched"] = timetable[0]
-        export_tt["daily_scores"] = timetable[1]
+        export_tt["free_matched"] = n_free
+        export_tt["daily_scores"] = daily_scores
         export_tt["timetable"] = {}
-        for course in timetable[2]:
+        for course in timetable:
             export_tt["timetable"][course[0]] = {}
             export_tt["timetable"][course[0]]["sections"] = {}
             for sec in course[1]:
@@ -575,10 +607,13 @@ if __name__ == "__main__":
     possible_courses = list(tt_json["courses"].keys())
     CDC, *electives = AskUserInput.course_info(possible_courses)
 
+    nDels, nOpels, nHuels = AskUserInput.ask_number_of_each_elective(
+        [len(courses_per_type) for courses_per_type in electives]
+    )
+
     (lite_order, free_days) = AskUserInput.work_load_spread()
     pref = ["DEls", "OPELs", "HUELs"]  # unused why is this here?
 
-    nDels, nOpels, nHuels = (len(courses) for courses in electives)
     DEls, HUELs, OPELs = electives
     filtered_json = get_filtered_json(tt_json, CDC, DEls, HUELs, OPELs)
     sect_seperated_json = separate_sections_into_types(filtered_json)
@@ -591,6 +626,17 @@ if __name__ == "__main__":
     # remove all excluded sections
     for (course_class, course_name, section_type), section in excluded_sections:
         sect_seperated_json[course_class][course_name][section_type].remove(section)
+
+    exam_fit_strategy = AskUserInput.fuzzy_select(
+        "How do you want your exam schedule to be",
+        list(EXAM_FIT_STRATEGIES.keys()),
+        multiselect=False,
+        default="NONE",
+    )
+
+    filter_exams_on_same_day = AskUserInput.ask_bool(
+        "should exams on same day be filtered?", default=False
+    )
 
     exhaustive_list_of_timetables = generate_exhaustive_timetables(
         sect_seperated_json, nDels, nOpels, nHuels
@@ -614,11 +660,13 @@ if __name__ == "__main__":
         len(timetables_without_clashes),
     )
 
-    in_my_preference_order = day_wise_filter(
+    in_my_preference_order = sort_acc_to_heuristics(
         timetables_without_clashes,
         filtered_json,
         free_days,
         lite_order,
+        exam_fit_strategy,
+        filter_exams_on_same_day,
         filter=False,
         strong=False,
     )
