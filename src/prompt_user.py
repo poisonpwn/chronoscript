@@ -99,8 +99,8 @@ class AskUserInput:
         return (
             CDCs,
             DEls,
-            HUEls,
             OPEls,
+            HUEls,
         )
 
     @staticmethod
