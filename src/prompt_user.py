@@ -56,6 +56,18 @@ class AskUserInput:
         handle = inquirer.text(message=prompt_message, *args, **kwargs)
         return handle.execute()
 
+    @staticmethod
+    @wraps(inquirer.confirm)
+    def ask_bool(prompt_message, *args, **kwargs):
+        """ask for boolean input from user
+
+        Args:
+            prompt_message(str): the message to prompt the user with
+            *args, *kwargs are additional parameters to inquirerpy
+        """
+        handle = inquirer.confirm(prompt_message, *args, **kwargs)
+        return handle.execute()
+
     @classmethod
     def course_info(cls, course_choices: list[str]):
         """
