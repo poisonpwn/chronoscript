@@ -63,31 +63,38 @@ curl -sSL https://install.python-poetry.org | python3 -
 
 5. If there are any particular course sections you'd like to avoid, remove them from the [json](./src/timetable.json) file.
 
-**Note:** We are currently working on a feature that allows you to do this interactively, but for now you'll have to do it manually.
+6. Select the all the CDCs from the list shown (toggling using the tab or space key, confirming the choices using enter)
 
-6. Open `timetables.py` and navigate to the bottom of the file.
+7. Similarly do the same for DELs, OPELs, HUELs and free days(toggling using the tab or space key, confirming the choices using enter).
+   type NONE to select nothing. 
 
-7. Modify the `CDCs`, `DELs`, `OPELs` and `HUELs` variables with the course codes you want (exhaustive) in your timetable.
+8. Type out the lite order as a unquoted comma seperated list of the days
 
-8. Choose the number of DELs, OPELs and HUELs you want from these in `nDels`, `nOpels` and `nHuels` respectively. Leave as `len(...)`, if you want to pick all of them for sure.
-
-9. Modify the `free_days` variable with the days you want to have free if possible.
-
-10. Modify the `lite_order` variable with the relative order of _liteness_ you want to have in your timetable. For example, if my order is
-
-```python
-["S", "M", "Su", "F", "T", "W", "Th"]
 ```
-
+? Arrange the days of the week in the order of liteness:
+ S, M, Su, W, Th, F
+```
 , then I want to have a timetable with the least number of hours on Saturday, then Monday, then Sunday, and so on.
 
-11. Run `poetry run python timetables.py` to generate the timetables.
+9. Choose the sections to be excluded just like you selected the courses
+
+10. Select Exam how you want your exam schedule to be (either NONE, Close Together or Spread Out)
+
+11. Select if you want to filter out the choices have exams on the same day (note this is not a strong filter it reduces the 
+rank of the timetables which have exams on same day).
+
+12. Run `poetry run python timetables.py` to generate the timetables.
 
 The console output will show you the rough results of your filters, and the number of timetables generated.
 
 It additionally prints out the timetable that most suits your needs, and the one that matches your minimum requirements but is the furthest from your ideal timetable.
 
-Format: `(number of free days matched, [number of hours of classes per day, in order of the lite_order variable], timetable)`
+Format: 
+`(whether the timetable matches free days, number of free days matched, 
+  [number of hours of classes per day in order of M to Su], 
+  number of free days, 
+  (if specified) whether the timetable has an two exams on same day, 
+  (if specified) ktotal exam spread seconds)`
 
 **Note**: This is used only for testing purposes and those who are comfortable with the script. You can visualize them as tables in the next step.
 
@@ -157,7 +164,7 @@ Here, the word `Tutorial` should be in the row below, and the corresponding sect
 
 ## Features we are working on (in no particular order)
 
-1. Generating a CLI/TUI that works across all platforms that will let you do this interactively, and not having to modify and src files.
+1. Generating a CLI/TUI that works across all platforms that will let you do this interactively, and not having to modify and src files. 
 
 2. Functionality to balance out the timetables across the week, so that you don't have too many classes on one day and too few on another.
 
